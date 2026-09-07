@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the following."
+title: "A comprehensive guide for identifying cis-regulatory elements in multi-sample single-cell epigenomic data"
+authors:
+  - family-names: Cho
+    given-names: Sohyeong
+    affiliation: Inha University
+  - family-names: Pyeon
+    given-names: Seung-Hyeon
+    affiliation: Inha University
+  - family-names: Lee
+    given-names: Chan-Kyu
+    affiliation: Inha University
+  - family-names: Ha
+    given-names: Jisu
+    affiliation: Inha University
+  - family-names: Lee
+    given-names: Junbeom
+    affiliation: Inha University
+  - family-names: Lee
+    given-names: Dongwon
+    affiliation: Boston Children's Hospital
+  - family-names: Han
+    given-names: Seong Kyu
+    affiliation: Inha University
+year: 2026
+journal: "TBD"
+doi: "TBD"

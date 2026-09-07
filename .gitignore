@@ -1,0 +1,28 @@
+# Data and outputs are not tracked
+data/*
+!data/README.md
+results/*
+!results/README.md
+
+# Genomic file types
+*.bam
+*.bai
+*.fastq
+*.fastq.gz
+*.bed
+*.bed.gz
+*.bedGraph
+*.bw
+*.h5ad
+*.narrowPeak
+*.broadPeak
+*.sumstats.gz
+*.l2.ldscore.gz
+*.annot.gz
+
+# Environment / editor
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.vscode/
