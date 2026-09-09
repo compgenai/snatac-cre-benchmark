@@ -31,10 +31,12 @@ results/              Outputs (not tracked; see results/README.md)
 
 | Script | Purpose |
 |---|---|
-| `01_cellranger_atac.sh` | Alignment to GRCh38, ARC-v1 chemistry |
-| `02_qc_filter.py` | TSSe ≥ 6, 5,000–50,000 unique fragments, uniform thresholds across samples |
-| `03_doublet_removal.py` | `snap.pp.scrublet` + `snap.pp.filter_doublets` |
-| `04_clustering_annotation.py` | 500-bp tile matrix, Harmony, Leiden, manual cell-type assignment |
+| `01_cellranger_atac.sh` | `cellranger-atac 2.1.0 count` × 9 samples; `--chemistry=ARC-v1`; ARC reference (`refdata-cellranger-arc-GRCh38-2020-A-2.0.0`) |
+| `02_qc_filter.ipynb` | `snap.pp.filter_cells` — TSSe ≥ 6, `passed_filters + 1 ∈ [5000, 50000]`, `is__cell_barcode == 1` |
+| `03_doublet_removal.ipynb` | 500-bp tile matrix, `select_features(n_features=250000)`, `snap.pp.scrublet`, `filter_doublets(probability_threshold=0.5)` |
+| `04_clustering_annotation.ipynb` | `select_features(n_features=200000)`, Harmony (`batch="sample", max_iter_harmony=20`), kNN (k=10), Leiden (random_state=0), manual cell-type labels |
+
+Note: `select_features` uses **250,000 features per sample** in step 03 and **200,000 features on the merged AnnDataSet** in step 04. See `s1_preprocessing/README.md`.
 
 Input accessions are listed in Additional file 1, Table S1. Output: 44,262 nuclei across ten cell types.
 
@@ -43,45 +45,58 @@ Input accessions are listed in Additional file 1, Table S1. Output: 44,262 nucle
 | Script | Purpose |
 |---|---|
 | `01_make_tn5_bed.sh` | Fragment ends as 1-bp insertion events |
-| `02_macs2_standard.sh` | MACS2, q ≤ 0.05 |
-| `03_macs2_permissive.sh` | MACS2, p ≤ 0.01 |
-| `04_merge_standard_snapatac2.py` | `snap.tl.merge_peaks(half_width=250)` |
-| `05_cluster_summits_3d.py` | Euclidean clustering over (start, summit, end), 70 bp |
-| `06_weiszfeld_centroid.py` | L1 geometric median, tol 1e-6, max 100 iterations |
-| `07_dedup_reciprocal50.sh` | `bedtools intersect -f 0.5 -r`, lower-ranked member discarded |
+| `02_macs2_standard.sh` | MACS2, default q ≤ 0.05 |
+| `03_macs2_permissive.sh` | MACS2, `-p 0.01` |
+| `04_merge_standard_snapatac2.py` | `snap.tl.merge_peaks(half_width=250)` — 501-bp fixed-width per cell type (Standard) |
+| `05_cluster_summits_3d.py` | 3D Euclidean clustering over (start, summit, end) with `--max_gap 70`, MM distance-weighted centroid (tol 1e-6, max 100 iters), asymmetric interval boundaries (Suggested) |
 
-Both workflows receive the same per-sample input.
+The `bedtools intersect -f 0.5 -r` deduplication for the Suggested workflow
+moved to `s3_gkmqc/01_dedup_50pct.py` (its output is one of two gkmQC input
+peak sets, together with the raw MM centroid).
 
 ## S3. Sequence-based quality assessment and trimming
 
-| Script | Purpose |
-|---|---|
-| `01_build_null_index.sh` | Null-sequence index built locally from UCSC hg38 |
-| `02_run_gkmqc.sh` | gkmQC `evaluate`, subsets of 5,000 peaks, 600-bp windows |
-| `03_auc_trim.py` | Trim at the **first subset falling below** mean AUROC 0.7, tie-aware |
+**Two branches, on-disk fact — do not conflate.** Full comparison table in
+`s3_gkmqc/README.md`.
 
-> The trimming rule is first-below-0.7. Record here which gkmQC build was used
-> (CPU or GPU) and whether the input was the pre- or post-deduplication peak set,
-> since the two are not interchangeable.
+| Script | Branch | Purpose |
+|---|---|---|
+| `01_dedup_50pct.py`            | A only        | 50 % reciprocal-overlap dedup on the raw MM centroid |
+| `02_run_gkmqc_cpu.sh`          | A (Fig 4a)    | CPU `gkmqc.py evaluate -re 40` on the dedup'd set |
+| `03_trim_first_below.py`       | A (Fig 4a)    | **first-below-0.7** rule, cap 40 subsets → 200,000 peaks; produces the Table S2 / Fig 4a counts |
+| `04_run_gkmqc_cpu_for_ldsc.sh` | B (LDSC)      | CPU `gkmqc.py evaluate -re 350` on the raw MM centroid (manuscript run used GPU build; CPU here is equivalent, see `s3_gkmqc/README.md`) |
+| `05_trim_max_above_for_ldsc.py`| B (LDSC)      | **max-above-0.7** rule; produces the hg38 BEDs feeding S5 |
+
+gkmQC's null-sequence index is generated internally (UCSC hg38); no separate `build_null_index` script exists.
 
 ## S4. Comparison of peak sets
 
 | Script | Purpose |
 |---|---|
-| `01_summit_windows.sh` | Summit-centered ±150 bp windows |
-| `02_concordance.py` | Asymmetric matched fractions via `bedtools intersect -u` |
+| `01_concordance.py` | Build ±150 bp summit windows (in-script) and compute asymmetric matched fractions via `bedtools intersect -a A -b B -u -sorted`; per-cell-type overlap TSV consumed by `figures/fig4_peak_overlap.py` |
 
 ## S5. Partitioned heritability
 
 | Script | Purpose |
 |---|---|
-| `01_munge_sumstats.sh` | `munge_sumstats.py` against the HapMap3 allele list |
-| `02_liftover_extend.sh` | CrossMap hg38 → hg19, ±1 kb extension |
-| `03_make_annot.sh` | Annotations appended to baselineLD v2.2 (1000G EUR Phase 3) |
-| `04_ldscore.sh` | LD scores per chromosome, 1 cM window |
-| `05_partitioned_h2.sh` | LDSC with `--overlap-annot --print-coefficients` |
+| `00_phase1_bed_ds.py` | Assemble hg38 per-cell-type BEDs for the Standard annotation (Suggested BEDs come from `s3_gkmqc/05_trim_max_above_for_ldsc.py`) |
+| `01_munge_sumstats.sh` | `munge_sumstats.py` × 4 GWAS against the HapMap3 allele list |
+| `02_liftover.sh` | **CrossMap 0.7.0** hg38 → hg19 (±1 kb extension is applied upstream in phase 1, in pandas — no `bedtools merge`) |
+| `03_make_annot.sh` | `make_annot.py` per chromosome × cell type (single-annotation LD-score input, phase 4) |
+| `03b_annot_overlap.sh` | `intersectBed -c` to append cell-type binary columns to baselineLD v2.2 (joint LD-score input, phase 7) |
+| `04_ldscore.sh` | `ldsc.py --l2 --thin-annot --ld-wind-cm 1` (single-annot) |
+| `04b_ldscore_overlap.sh` | `ldsc.py --l2 --ld-wind-cm 1` on the overlap annots (no `--thin-annot`) |
+| `05_partitioned_h2.sh` | `ldsc.py --h2 --overlap-annot --print-coefficients` — main joint analysis (baselineLD v2.2 + 10 cell-type annots per workflow) |
+| `06_h2cts_sensitivity.sh` | `ldsc.py --h2-cts` on all 20 (10 CT × 2 workflow) annotations |
 
 GWAS sources are listed in Additional file 1, Table S3.
+
+## Figures
+
+Figure scripts live in `figures/`. `fig4_peak_overlap.py` builds Fig 4a from
+the S4 concordance TSV. `fig3_ldsc_enrichment.py` and `fig3_tau_zscore.py`
+build the heritability heatmaps from `LDSC_master_table.csv`, which is
+produced by `figures/make_master_table.py` reading S5 outputs.
 
 ---
 
