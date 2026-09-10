@@ -1,37 +1,49 @@
 # S2 · Peak calling and cell-type peak-set construction
 
-Runs both workflows (Standard MACS2 q ≤ 0.05 and Suggested MACS2 p ≤ 0.01)
-on the same per-sample × per-cell-type pseudobulk Tn5 insertion tracks, then
-constructs the corresponding cell-type peak sets:
+Runs both workflows on the same per-(sample × cell type) pseudobulk Tn5
+insertion tracks. Both start from per-pseudobulk MACS2 calls, but merge to
+a per-cell-type peak set via different routes:
 
-- **Standard workflow**: `snap.tl.merge_peaks(half_width=250)` → 501-bp
-  fixed-width peaks per cell type.
-- **Suggested workflow**: 3D Euclidean summit clustering + MM
-  distance-weighted centroid with asymmetric intervals (per cell type). The
-  deduplication and AUC-trim that turn this set into the final Fig 4a peak
-  set live in **S3** — see `s3_gkmqc/README.md`.
+- **Standard workflow**: `macs2 callpeak` at the default threshold (q ≤ 0.05)
+  per pseudobulk (outputs at `$DATA_ROOT/peakcalling_default/`), then
+  `snap.tl.merge_peaks(half_width=250)` — 501-bp fixed-width iterative
+  overlap removal per cell type.
+- **Suggested workflow**: `macs2 callpeak -p 0.01` per pseudobulk (outputs at
+  `$DATA_ROOT/peakcalling_p0.01/`), then 3D Euclidean summit clustering + MM
+  distance-weighted centroid with asymmetric intervals to produce a
+  per-cell-type peak set. The subsequent deduplication and AUC-trim that
+  finalize the Fig 4a peak set live in **S3** — see `s3_gkmqc/README.md`.
+
+## Pipeline layout
+
+```
+peakcalling_default/  ──→  04_merge_standard_snapatac2.py  ──→  Std_snapMerge_<CT>.narrowPeak   (Standard)
+peakcalling_p0.01/    ──→  05_cluster_summits_3d.py        ──→  Improved_<CT>.narrowPeak         (Suggested)
+```
 
 ## Scripts (run in order)
 
 | # | File | Purpose |
 |---|------|---------|
 | 01 | `01_make_tn5_bed.sh`               | Extract 1-bp Tn5 insertion events from both fragment ends (no +4/-5 shift) |
-| 02 | `02_macs2_standard.sh`             | MACS2, default q ≤ 0.05 (Standard) |
-| 03 | `03_macs2_permissive.sh`           | MACS2, `-p 0.01` (Suggested) |
-| 04 | `04_merge_standard_snapatac2.py`   | `snap.tl.merge_peaks(half_width=250)` on Standard per-sample narrowPeak |
-| 05 | `05_cluster_summits_3d.py`         | 3D Euclidean clustering (start, summit, end) with `--max_gap 70`, MM distance-weighted centroids (tol 1e-6, max 100 iters), asymmetric interval boundaries; single script fills both README slots `05_cluster_summits_3d.py` and `06_weiszfeld_centroid.py` |
+| 02 | `02_macs2_standard.sh`             | MACS2, default q ≤ 0.05 (Standard) — per pseudobulk → `peakcalling_default/` |
+| 03 | `03_macs2_permissive.sh`           | MACS2, `-p 0.01` (Suggested) — per pseudobulk → `peakcalling_p0.01/` |
+| 04 | `04_merge_standard_snapatac2.py`   | `snap.tl.merge_peaks(half_width=250)` — 501-bp fixed-width per cell type (Standard) |
+| 05 | `05_cluster_summits_3d.py`         | 3D Euclidean clustering over (start, summit, end) with `--max_gap 70`, MM distance-weighted centroid (tol 1e-6, max 100 iters), asymmetric interval boundaries (Suggested) |
 
 ## Inputs
 
-- Post-annotation `AnnDataSet` from S1
-- Per-cell-type / per-sample fragment BEDs (extracted by 01)
+- Per-(sample × cell type) fragment BEDs from S1 · 04 (`$DATA_ROOT/fragments/`)
+- Tn5 insertion BEDs written by 01 (`$DATA_ROOT/tn5_insertions/`)
 
 ## Outputs (not tracked)
 
-- Per-(sample × cell type) MACS2 narrowPeak (both q and p variants)
-- Per-cell-type merged narrowPeak:
-  - Standard: `Std_snapMerge_<CT>.narrowPeak` (501-bp fixed width)
-  - Suggested: `Improved_<CT>.narrowPeak` (raw MM centroid — feeds S3 dedup)
+- Per-(sample × cell type) MACS2 narrowPeak:
+  - Standard: `$DATA_ROOT/peakcalling_default/mcluster<CT>.<SAMPLE>/macs2_*/`
+  - Suggested: `$DATA_ROOT/peakcalling_p0.01/mcluster<CT>.<SAMPLE>/macs2_*/`
+- Per-cell-type narrowPeak (feeds S3):
+  - Standard: `$OUT_ROOT/standard_snapMerge/Std_snapMerge_<CT>.narrowPeak` (501-bp fixed width)
+  - Suggested: `$OUT_ROOT/gkmQC/MM/Improved_<CT>.narrowPeak` (raw MM centroid)
 
 ## Environments
 

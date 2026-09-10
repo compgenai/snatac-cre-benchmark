@@ -1,0 +1,19 @@
+{
+  "_comment": "Marker genes used in S1 · 04 for the dotplot that drives the manual cluster → celltype assignment (celltype_mapping.json).",
+  "Atrial Cardiomyocytes": ["NPPA", "MYH6", "MYL7"],
+  "Ventricular Cardiomyocytes": ["MYH7", "HEY2", "MYL2"],
+  "Fibroblasts": ["DCN"],
+  "Endothelial": ["EGFL7", "VWF"],
+  "Smooth Muscle": ["GJA4", "TAGLN"],
+  "Macrophages": ["CD163", "MS4A6A"],
+  "Lymphocytes": ["IL7R", "THEMIS"],
+  "Adipocytes": ["ADIPOQ", "CIDEA"],
+  "Nervous Cells": ["NRXN3", "GPM6B"],
+  "Endocardial-like Cells": ["NRG3", "NPR3"],
+  "Myofibroblasts": ["MYH10"],
+  "Arterial Smooth Muscle Cells": ["ACTA2", "TAGLN"],
+  "Epiblast": ["NANOG", "POU5F1", "SOX2", "KLF17", "TDGF1"],
+  "Primitive Endoderm": ["GATA6", "GATA4", "SOX17", "PDGFRA"],
+  "Trophectoderm": ["GATA3", "GATA2", "KRT18", "TEAD3"],
+  "Early Inner Cell Mass": ["RSPO3", "ARGFX", "PRDM14", "SOX2"]
+}
